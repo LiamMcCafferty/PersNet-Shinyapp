@@ -61,7 +61,7 @@ data_dict <- read.csv("~/Dropbox (Partners HealthCare)/UC Irvine project/uc_irvi
 				 "Field_Annotation" = "Field.Annotation")
 
 input <- list()
-input$survey_identifier <- "record_id"
+input$survey_identifier <- "study_id"
 input$instrument_select <- "network_survey"
 input$display_texttry <- FALSE
 input$texttry <- "0,1,2,NA"
@@ -137,6 +137,9 @@ ui <- fluidPage(
 									 						All = "all"),
 									 selected = "dataframe"),
 			
+			downloadButton("downloadContents", "Download .csv"),
+			downloadButton("downloadRDA", "Download .rda"),
+			
 			conditionalPanel(
 				# Input: texttry for different ties -----
 				condition = 'output.panelStatus',
@@ -172,12 +175,12 @@ server <- function(input, output, session) {
 		# having a comma separator causes `read.csv` to error
 		tryCatch(
 			{
-				thing <- read.csv(input$file1$datapath,
+				input_dataset <- read.csv(input$file1$datapath,
 													header = TRUE,
 													sep = ",",
 													quote = '"',
 													stringsAsFactors = FALSE)
-				return(thing)
+				return(input_dataset)
 			},
 			error = function(e) {
 				# return a safeError if a parsing error occurs
@@ -194,18 +197,18 @@ server <- function(input, output, session) {
 		# having a comma separator causes `read.csv` to error
 		tryCatch(
 			{
-				thing <- read.csv(input$file2$datapath,
+				data_dict <- read.csv(input$file2$datapath,
 													header = TRUE,
 													sep = ",",
 													quote = '"',
 													stringsAsFactors = FALSE)
-				# print(colnames(thing))
+				# print(colnames(data_dict))
 				
 				#Due to strange characters contained w/in data dictionary we are renaming it
 				#  for ease of programming. This is a potential break point for the code in
 				#  the case that the names for the data dictionary are different (they
 				#  shouldn't be)
-				thing %>%
+				data_dict %>%
 					rename("Variable_Field_Name" = "Variable...Field.Name",
 								 "Form_Name" = "Form.Name",
 								 "Section_Header" = "Section.Header",
@@ -226,17 +229,17 @@ server <- function(input, output, session) {
 								 "Matrix_Group_Name" = "Matrix.Group.Name",
 								 "Matrix_Ranking?" = "Matrix.Ranking.",
 								 "Field_Annotation" = "Field.Annotation") ->
-					thing
-				# print(colnames(thing))
+					data_dict
+				# print(colnames(data_dict))
 				
 				#Appearently yes/no objects exist, to cut this off early, we will turn them
 				#  into radios and change their choices to a default of 0 = no, 1 = yes.
-				thing[thing$Field_Type == "yesno",]$Choices_Calculations_or_Slider_Labels <-
+				data_dict[data_dict$Field_Type == "yesno",]$Choices_Calculations_or_Slider_Labels <-
 					"0, No | 1, Yes"
-				thing[thing$Field_Type == "yesno",]$Field_Type <-
+				data_dict[data_dict$Field_Type == "yesno",]$Field_Type <-
 					"radio"
 				
-				return(thing)
+				return(data_dict)
 			},
 			error = function(e) {
 				# return a safeError if a parsing error occurs
@@ -761,86 +764,97 @@ server <- function(input, output, session) {
 			#lapply Function which iterates through each group of checkbox alter data,
 			# and constructs an alter_frame for it.
 			lapply(unique(attr(level_list_alters_checkbox, "varname")), function(i){
-			
-			level_list_alters_checkbox_select <-
-				level_list_alters_checkbox %>%
-				subset(attr(level_list_alters_checkbox, "varname") == i)
-			
-			#Creaking list which contains values for each alter. We are making a list
-			#  rather than a dataframe as the length of each vector will modulate based
-			#  upon the count of selected inviduals.
-			lapply(c(1:nrow(input_frame)), function(rownum){
-				input_frame[rownum,
-										c(input$survey_identifier,
-											expand.grid(paste0("___", unlist(unique(level_list_alters_checkbox_select))),
-																	names(level_list_alters_checkbox_select)) %>%
-												apply(1, function(x){paste0(x[2], x[1])}))]
-			}) -> workbench
-			
-			workbench[[1]] -> input_row
-			
-			#Creates dataframe from raw checkboxes
-			lapply(workbench, function(input_row){
-				input_row <- input_row %>% unlist()
-				wb_id <- input_row[input$survey_identifier]
-				input_row <- input_row[names(input_row) != names(wb_id)]
 				
-				keep_remove_frame %>%
-					"["(keep_remove_frame[[input$survey_identifier]] == wb_id,
-							colnames(keep_remove_frame) != input$survey_identifier) %>%
-					unlist() %>%
-					as.logical() ->
-					keep_remove_bench
+				level_list_alters_checkbox_select <-
+					level_list_alters_checkbox %>%
+					subset(attr(level_list_alters_checkbox, "varname") == i)
 				
-				input_df <- data.frame(id = sub(paste0(i, "___", "[0-9]+$"),"" , names(input_row)),
-															 key = sub(paste0("^name[0-9]+",i, "___"),"" , names(input_row)),
-															 value = input_row,
-															 row.names = NULL, stringsAsFactors = FALSE)
+				#Creaking list which contains values for each alter. We are making a list
+				#  rather than a dataframe as the length of each vector will modulate based
+				#  upon the count of selected inviduals.
+				lapply(c(1:nrow(input_frame)), function(rownum){
+					input_frame[rownum,
+											c(input$survey_identifier,
+												expand.grid(paste0("___", unlist(unique(level_list_alters_checkbox_select))),
+																		names(level_list_alters_checkbox_select)) %>%
+													apply(1, function(x){paste0(x[2], x[1])}))]
+				}) -> workbench
 				
-				input_df$key <- input_df$key %>%
-					factor(levels = unlist(unique(level_list_alters_checkbox_select)),
-								 labels = trimws(names(unlist(unique(level_list_alters_checkbox_select)))))
+				# workbench[[1]] -> input_row
 				
-				#An option on how to do this
-				# input_df_spread <- spread(input_df, key, value)
+				#Creates dataframe from raw checkboxes
+				lapply(workbench, function(input_row){
+					input_row <- input_row %>% unlist()
+					wb_id <- input_row[input$survey_identifier]
+					input_row <- input_row[names(input_row) != names(wb_id)]
+					
+					keep_remove_frame %>%
+						"["(keep_remove_frame[[input$survey_identifier]] == wb_id,
+								colnames(keep_remove_frame) != input$survey_identifier) %>%
+						unlist() %>%
+						as.logical() ->
+						keep_remove_bench
+					
+					input_df <- data.frame(id = sub(paste0(i, "___", "[0-9]+$"),"" , names(input_row)),
+																 key = sub(paste0("^name[0-9]+",i, "___"),"" , names(input_row)),
+																 value = input_row,
+																 row.names = NULL, stringsAsFactors = FALSE)
+					
+					input_df$key <- input_df$key %>%
+						factor(levels = unlist(unique(level_list_alters_checkbox_select)),
+									 labels = trimws(names(unlist(unique(level_list_alters_checkbox_select)))))
+					
+					#An option on how to do this
+					# input_df_spread <- spread(input_df, key, value)
+					
+					newcols <- paste0(i, 1:length(levels(input_df$key)))
+					
+					input_df %>%
+						group_by(id) %>%
+						lapply(1:length(levels(input_df$key)), slice, .data = .) %>%
+						lapply(filter, value == 1) %>%
+						lapply(select, -value) %>%
+						append(list(input_df %>% select(id) %>% unique()), 0) %>%
+						Reduce(function(...) left_join(..., by = c("id")), .) %>%
+						apply(1, function(x){x[!is.na(x)] %>% "length<-"(length(x))}) %>%
+						t() %>%
+						as.data.frame(stringsAsFactors = FALSE) %>%
+						"colnames<-"(c("alter_id", newcols)) ->
+						thing
+					
+					thing[newcols] <- lapply(thing[newcols], factor, levels = levels(input_df$key))
+					thing <- thing[keep_remove_bench,]
+					thing <- data.frame(id = wb_id %>% "names<-"(NULL), thing)
+					
+					return(thing)
+				}) %>%
+					Reduce(function(...) rbind(...), .) -> output_frame
 				
-				newcols <- paste0(i, 1:length(levels(input_df$key)))
-				
-				input_df %>%
-					group_by(id) %>%
-					lapply(1:length(levels(input_df$key)), slice, .data = .) %>%
-					lapply(filter, value == 1) %>%
-					lapply(select, -value) %>%
-					append(list(input_df %>% select(id) %>% unique()), 0) %>%
-					Reduce(function(...) left_join(..., by = c("id")), .) %>%
-					apply(1, function(x){x[!is.na(x)] %>% "length<-"(length(x))}) %>%
-					t() %>%
-					as.data.frame(stringsAsFactors = FALSE) %>%
-					"colnames<-"(c("alter_id", newcols)) ->
-					thing
-				
-				thing[newcols] <- lapply(thing[newcols], factor, levels = levels(input_df$key))
-				thing <- thing[keep_remove_bench,]
-				thing <- data.frame(id = wb_id %>% "names<-"(NULL), thing)
-				
-				return(thing)
-			}) %>%
-				Reduce(function(...) rbind(...), .) -> output_frame
-			
-				return(output_frame)
-			}) %>%
+					return(output_frame)
+				}) %>%
 				Reduce(function(...) left_join(..., by = c("id", "alter_id")), .) ->
 				alter_frame_checkbox
 			
 			#Forloop which checks each column of a checkbox group (but not the first)
 			#  and removes it if its all NA's, this is to remove repetitive NA columns
 			#Probably a cleaner way of doing this
-			for(i in unique(attr(level_list_alters_checkbox, "varname"))){
-				alter_frame_checkbox[grepl(paste0("^", i, "[0-9]$"), colnames(alter_frame_checkbox)) &
-														 	!grepl(paste0("^", i, "1$"), colnames(alter_frame_checkbox))][
-				alter_frame_checkbox[grepl(paste0("^", i, "[0-9]$"), colnames(alter_frame_checkbox)) &
-														 	!grepl(paste0("^", i, "1$"), colnames(alter_frame_checkbox))] %>%
-					sapply(function(x){all(is.na(x))})] <- NULL
+			checkcols <- colnames(alter_frame_checkbox)
+			for(i in 1:ncol(alter_frame_checkbox)){
+				if(all(is.na(alter_frame_checkbox[,checkcols[i]])) &
+					 !colnames(alter_frame_checkbox)[i] %in% c("id", "alter_id")){
+					 	if(gsub(
+					 		paste(
+					 			paste0("^", unique(attr(level_list_alters_checkbox, "varname"))),
+					 			collapse = "|"),
+					 		"",
+					 		checkcols[i]) %>%
+					 		as.integer() > 1){
+					 		alter_frame_checkbox[,checkcols[i]] <- NULL
+				
+					 	}
+					}
+					 
+				print(i)
 			}
 		
 		}else{
@@ -935,6 +949,71 @@ server <- function(input, output, session) {
 			return(frame_make()[1:12])
 		}
 	})
+	
+	# Control for type of download ----
+	output$downloadContents <- downloadHandler(
+		
+		filename = function(){
+			paste0(input$disp, ".csv")
+		},
+		content = function(file){
+			if(input$disp == "dataframe"){
+				print("should be outputting dataframe")
+				write.csv(frame_make(), file, row.names = FALSE)
+			}else if(input$disp == "data_dictionary"){
+				print("should be outputting data_dictionary")
+				write.csv(data_dict_make(), file, row.names = FALSE)
+			}else if(input$disp == "alter_frame"){
+				print("should be outputting alter_frame")
+				write.csv(alter_frame_maker(), file, row.names = FALSE)
+			}else if(input$disp == "leveled_dataframe"){
+				print("should be outputting leveled_dataframe")
+				write.csv(leveled_singles(), file, row.names = FALSE)
+			}else if(input$disp == "network_structure"){
+				print("should be outputting network_structure")
+				write.csv(network_structure(), file, row.names = FALSE)
+			}else{
+				print("should be outputting all")
+				write.csv(frame_make(), file, row.names = FALSE)
+			}
+		}
+	)
+	
+	# Control for type of download load() ----
+	output$downloadRDA <- downloadHandler(
+		
+		filename = function(){
+			paste0(input$disp, ".rda")
+		},
+		content = function(file){
+			if(input$disp == "dataframe"){
+				print("should be outputting dataframe")
+				output <- frame_make()
+				# write.csv(frame_make(), file, row.names = FALSE)
+			}else if(input$disp == "data_dictionary"){
+				print("should be outputting data_dictionary")
+				output <- data_dict_make()
+				# write.csv(data_dict_make(), file, row.names = FALSE)
+			}else if(input$disp == "alter_frame"){
+				print("should be outputting alter_frame")
+				output <- alter_frame_maker()
+				# write.csv(alter_frame_maker(), file, row.names = FALSE)
+			}else if(input$disp == "leveled_dataframe"){
+				print("should be outputting leveled_dataframe")
+				output <- leveled_singles()
+				# write.csv(leveled_singles(), file, row.names = FALSE)
+			}else if(input$disp == "network_structure"){
+				print("should be outputting network_structure")
+				output <- network_structure()
+				# write.csv(network_structure(), file, row.names = FALSE)
+			}else{
+				print("should be outputting all")
+				output <- frame_make()
+				# write.csv(frame_make(), file, row.names = FALSE)
+			}
+			save(output, file = file)
+		}
+	)
 	
 	observe({
 		print(input$disp)
