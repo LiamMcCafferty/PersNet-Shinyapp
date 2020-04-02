@@ -760,6 +760,9 @@ server <- function(input, output, session) {
 					wb_id <- input_row[input$survey_identifier]
 					input_row <- input_row[names(input_row) != names(wb_id)]
 					
+					#Breaking out of lapply in case of size 0 networks
+					if(length(input_row) == 0)return()
+					
 					input_levels <- unlist(unique(level_list_alters_single_select))
 					
 					input_row %>%
@@ -774,7 +777,9 @@ server <- function(input, output, session) {
 										 stringsAsFactors = FALSE) ->
 						output_frame
 					
-					output_frame %>% "colnames<-"(c("id", "alter_id", "alter_num", i))
+					output_frame %>%
+						"colnames<-"(c("id", "alter_id", "alter_num", i)) %>%
+						return()
 					
 				}) %>% "rownames<-"(NULL) -> workbench
 				
@@ -827,8 +832,6 @@ server <- function(input, output, session) {
 													apply(1, function(x){paste0(x[2], x[1])}))]
 				}) -> workbench
 				
-				# workbench[[1]] -> input_row
-				
 				#Creates dataframe from raw checkboxes
 				lapply(workbench, function(input_row){
 					input_row <- input_row %>% unlist()
@@ -841,6 +844,9 @@ server <- function(input, output, session) {
 						unlist() %>%
 						as.logical() ->
 						keep_remove_bench
+					
+					#Skips lapply iteration in individual has 0 network size
+					if(all(!keep_remove_bench))return()
 					
 					input_df <- data.frame(id = sub(paste0(i, "___", "[0-9]+$"),"" , names(input_row)),
 																 key = sub(paste0("^name[0-9]+",i, "___"),"" , names(input_row)),
@@ -901,7 +907,7 @@ server <- function(input, output, session) {
 					 	}
 					}
 					 
-				print(i)
+				# print(i)
 			}
 		
 		}else{
@@ -937,6 +943,9 @@ server <- function(input, output, session) {
 							"["(colnames(keep_remove_frame) != input$survey_identifier) %>%
 							unlist() %>%
 							as.logical() -> keep_remove_bench
+						
+						#Skips lapply iteration for individuals with networks of 0
+						if(all(!keep_remove_bench))return()
 						
 						input_row <- input_row[keep_remove_bench]
 						
