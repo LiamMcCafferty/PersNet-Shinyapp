@@ -35,7 +35,7 @@ library(igraph)
 
 
 #Comment this out before running program
-input_frame <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/raw_w_smalls.csv",
+input_frame <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/raw_w_smalls_stringid.csv",
 												stringsAsFactors = FALSE)
 data_dict <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/PersonalNetworksInstrumentDemo_DataDictionary_2020-03-13.csv",
 											stringsAsFactors = FALSE) %>%
@@ -519,7 +519,7 @@ server <- function(input, output, session) {
 		
 		#Function which construct matrices we use for structure calculations
 		matrix_maker <- function(tie_vector, tie_count = NA, na.rm = TRUE){
-
+			
 			if(is.na(tie_count)){
 				tie_combn_n <- sapply(2:30, function(x){factorial(x) / (factorial(2) * factorial(x - 2))})
 				tie_count <- c(2:30)[(length(tie_vector) - 1) == tie_combn_n]
@@ -529,7 +529,8 @@ server <- function(input, output, session) {
 			
 			tie_vector_lim <- tie_vector %>%
 				"["(!names(tie_vector) %in% input$survey_identifier) %>%
-				unlist()
+				unlist() %>%
+				as.integer()
 			
 			mat <- matrix(NA, nrow = tie_count, ncol = tie_count)
 			mat[lower.tri(mat)] <- tie_vector_lim
@@ -577,7 +578,8 @@ server <- function(input, output, session) {
 					 		subset(keep_remove_frame[[input$survey_identifier]] == input_id) %>%
 					 		unlist() %>%
 					 		"["(!grepl(paste0("^", input$survey_identifier, "$"),
-					 							 colnames(keep_remove_frame)))
+					 							 colnames(keep_remove_frame))) %>%
+					 		as.integer()
 					 	
 					 	names_frame_row <- names_frame %>%
 					 		subset(names_frame[[input$survey_identifier]] == input_id) %>%
@@ -605,14 +607,17 @@ server <- function(input, output, session) {
 					 		more_names_list[!(more_names_list %in% selected_names)]
 					 	}) %>% unlist() %>% c(selected_names) %>% length() -> netsize
 					 	
-					 	return(netsize %>% "names<-"(input_id))
+					 	return(netsize)
 
 		}, names_frame = names_frame, keep_remove_frame = keep_remove_frame) ->
 			network_size
 		
 		#This should unload egonet in case its loaded in already
 		if("egonet" %in% (.packages())){
-			detach("package:egonet", unload=TRUE) 
+			detach("package:egonet", unload=TRUE)
+			detach("package:sna", unload=TRUE)
+			detach("package:statnet.common", unload=TRUE)
+			detach("package:network", unload=TRUE)
 		}
 		# Calculate maximum, avg degree, and density of alters after removal of Ego
 		max_degree <- unlist(lapply(graph_list, function(x){max(degree(x))}))
