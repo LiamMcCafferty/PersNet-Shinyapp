@@ -35,9 +35,9 @@ library(igraph)
 
 
 #Comment this out before running program
-input_frame <- read.csv("~/Dropbox (Partners HealthCare)/UC Irvine project/uc_irvine_processing/SocialNetworks_DATA_2019-02-14_1525_Dhand.csv",
+input_frame <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/raw_w_smalls.csv",
 												stringsAsFactors = FALSE)
-data_dict <- read.csv("~/Dropbox (Partners HealthCare)/UC Irvine project/uc_irvine_processing/instrument.csv",
+data_dict <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/PersonalNetworksInstrumentDemo_DataDictionary_2020-03-13.csv",
 											stringsAsFactors = FALSE) %>%
 	rename("Variable_Field_Name" = "Variable...Field.Name",
 				 "Form_Name" = "Form.Name",
@@ -60,9 +60,16 @@ data_dict <- read.csv("~/Dropbox (Partners HealthCare)/UC Irvine project/uc_irvi
 				 "Matrix_Ranking?" = "Matrix.Ranking.",
 				 "Field_Annotation" = "Field.Annotation")
 
+#Appearently yes/no objects exist, to cut this off early, we will turn them
+#  into radios and change their choices to a default of 0 = no, 1 = yes.
+data_dict[data_dict$Field_Type == "yesno",]$Choices_Calculations_or_Slider_Labels <-
+	"0, No | 1, Yes"
+data_dict[data_dict$Field_Type == "yesno",]$Field_Type <-
+	"radio"
+
 input <- list()
-input$survey_identifier <- "study_id"
-input$instrument_select <- "network_survey"
+input$survey_identifier <- "record_id"
+input$instrument_select <- "personal_network_survey_for_clinical_research"
 input$display_texttry <- FALSE
 input$texttry <- "0,1,2,NA"
 
@@ -545,16 +552,22 @@ server <- function(input, output, session) {
 		mat_list <- apply(tie_frame, 1, matrix_maker, tie_count = tie_count) %>%
 			"names<-"(c(tie_frame[input$survey_identifier] %>% unlist()))
 		
+		if(any(sapply(mat_list, ncol) < 3)){
+			small_networks <- mat_list[sapply(mat_list, ncol) < 3]
+			mat_list <- mat_list[!sapply(mat_list, ncol) < 3]
+		}else{
+			small_networks <- list()
+		}
+		
 		graph_list <- lapply(mat_list, function(x){
 			graph.adjacency(x[-1, -1], mode = "undirected", weighted = TRUE)
 		})
 		
 		#Makes named vectors into dataframes. So I don't have to repeat this constantly
 		named_vect_matrixer <- function(input_vect, id_name = "id", var_name = "var"){
-			data.frame(names(input_vect), input_vect) %>%
+			data.frame(names(input_vect), input_vect, stringsAsFactors = FALSE) %>%
 				"colnames<-"(c(id_name, var_name))
 		}
-		
 		
 		#Calculating network size
 		sapply(names_frame[[input$survey_identifier]],
@@ -636,6 +649,40 @@ server <- function(input, output, session) {
 		#  Combining everything together
 		structure_vars <- Reduce(function(...)
 			merge(..., by=input$survey_identifier, all.x=TRUE),structure_vars)
+		
+		if(length(small_networks) > 0){
+			lapply(small_networks, function(input_mat){
+				if(nrow(input_mat) > 1){
+					data.frame(constraint = 1,
+										 effsize = 1,
+										 density = NA,
+										 mean_degree = 0,
+										 max_degree = 0) %>%
+						return()
+				}else{
+					data.frame(constraint = NA,
+										 effsize = NA,
+										 density = NA,
+										 mean_degree = 0,
+										 max_degree = 0) %>%
+						return()
+				}
+			}) -> small_networks
+			
+			for(i in 1:length(small_networks)){
+				small_networks[[i]][input$survey_identifier] <- names(small_networks)[i]
+			}
+			
+			for(i in small_networks){
+				structure_vars[
+					structure_vars[[input$survey_identifier]] == i[[input$survey_identifier]],
+					] %>% replace(names(i), i) ->
+					structure_vars[
+						structure_vars[[input$survey_identifier]] == i[[input$survey_identifier]],
+						]
+			}
+			
+		}
 		
 		return(structure_vars)
 	})
