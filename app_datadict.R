@@ -35,9 +35,9 @@ library(igraph)
 
 
 #Comment this out before running program
-input_frame <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/raw_w_smalls_stringid.csv",
+input_frame <- read.csv("~/Dropbox (Partners HealthCare)/Harvard Professionals Study/Medical Professionals Collaboration/HarvardProfessionals_DATA_2020-03-23_1431.csv",
 												stringsAsFactors = FALSE)
-data_dict <- read.csv("~/Dropbox (Partners HealthCare)/BWH Backup - Liam/Zero_Color Networks Work/PersonalNetworksInstrumentDemo_DataDictionary_2020-03-13.csv",
+data_dict <- read.csv("~/Dropbox (Partners HealthCare)/Harvard Professionals Study/Medical Professionals Collaboration/R01Aim2CareerDevelopmentNetwork_DataDictionary_2019-03-25_no consent.csv",
 											stringsAsFactors = FALSE) %>%
 	rename("Variable_Field_Name" = "Variable...Field.Name",
 				 "Form_Name" = "Form.Name",
@@ -609,7 +609,8 @@ server <- function(input, output, session) {
 					 	
 					 	return(netsize)
 
-		}, names_frame = names_frame, keep_remove_frame = keep_remove_frame) ->
+		}, names_frame = names_frame, keep_remove_frame = keep_remove_frame) %>%
+			"names<-"(c(names_frame[[input$survey_identifier]])) ->
 			network_size
 		
 		#This should unload egonet in case its loaded in already
